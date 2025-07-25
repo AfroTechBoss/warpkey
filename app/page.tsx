@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { BaseIcon, EthereumIcon, OptimismIcon, ArbitrumIcon, PolygonIcon, ZoraIcon } from "@/components/network-icons"
+import { WalletConnection } from "@/components/WalletConnection"
+import { useFarcaster } from "@/contexts/FarcasterContext"
+import { usePrivyWallet } from "@/contexts/PrivyContext"
 
 type View = "home" | "scanner" | "browser" | "wallet" | "sessions" | "networks"
 type Theme = "dark" | "light"
@@ -39,7 +43,7 @@ interface Network {
   name: string
   chainId: number
   symbol: string
-  icon: string
+  icon: React.ComponentType<{ className?: string; size?: number }>
   rpcUrl: string
   blockExplorer: string
   color: string
@@ -51,7 +55,7 @@ const SUPPORTED_NETWORKS: Network[] = [
     name: "Base",
     chainId: 8453,
     symbol: "ETH",
-    icon: "🔵",
+    icon: BaseIcon,
     rpcUrl: "https://mainnet.base.org",
     blockExplorer: "https://basescan.org",
     color: "bg-blue-600",
@@ -61,7 +65,7 @@ const SUPPORTED_NETWORKS: Network[] = [
     name: "Ethereum",
     chainId: 1,
     symbol: "ETH",
-    icon: "⟠",
+    icon: EthereumIcon,
     rpcUrl: "https://mainnet.infura.io",
     blockExplorer: "https://etherscan.io",
     color: "bg-gray-600",
@@ -71,7 +75,7 @@ const SUPPORTED_NETWORKS: Network[] = [
     name: "Optimism",
     chainId: 10,
     symbol: "ETH",
-    icon: "🔴",
+    icon: OptimismIcon,
     rpcUrl: "https://mainnet.optimism.io",
     blockExplorer: "https://optimistic.etherscan.io",
     color: "bg-red-600",
@@ -81,7 +85,7 @@ const SUPPORTED_NETWORKS: Network[] = [
     name: "Arbitrum",
     chainId: 42161,
     symbol: "ETH",
-    icon: "🔷",
+    icon: ArbitrumIcon,
     rpcUrl: "https://arb1.arbitrum.io/rpc",
     blockExplorer: "https://arbiscan.io",
     color: "bg-blue-500",
@@ -91,7 +95,7 @@ const SUPPORTED_NETWORKS: Network[] = [
     name: "Polygon",
     chainId: 137,
     symbol: "MATIC",
-    icon: "🟣",
+    icon: PolygonIcon,
     rpcUrl: "https://polygon-rpc.com",
     blockExplorer: "https://polygonscan.com",
     color: "bg-purple-600",
@@ -101,7 +105,7 @@ const SUPPORTED_NETWORKS: Network[] = [
     name: "Zora",
     chainId: 7777777,
     symbol: "ETH",
-    icon: "⚫",
+    icon: ZoraIcon,
     rpcUrl: "https://rpc.zora.energy",
     blockExplorer: "https://explorer.zora.energy",
     color: "bg-black",
@@ -111,14 +115,25 @@ const SUPPORTED_NETWORKS: Network[] = [
 export default function WarpKey() {
   const [currentView, setCurrentView] = useState<View>("home")
   const [theme, setTheme] = useState<Theme>("dark")
-  const [isConnected, setIsConnected] = useState(false)
-  const [wallet, setWallet] = useState<WalletInfo | null>(null)
   const [sessions, setSessions] = useState<DAppSession[]>([])
   const [urlInput, setUrlInput] = useState("")
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [pendingTransaction, setPendingTransaction] = useState<Transaction | null>(null)
   const [currentDApp, setCurrentDApp] = useState<DAppSession | null>(null)
   const [isScanning, setIsScanning] = useState(false)
+  
+  // Use Farcaster and Privy contexts
+  const { isAuthenticated: farcasterAuthenticated, user: farcasterUser } = useFarcaster()
+  const { walletInfo } = usePrivyWallet()
+  
+  // Determine connection state from contexts
+  const isConnected = farcasterAuthenticated || !!walletInfo
+  const wallet = walletInfo ? {
+    address: walletInfo.address,
+    ens: walletInfo.ensName,
+    balance: walletInfo.balance + ' ETH',
+    network: currentNetwork.name
+  } : null
 
   const [currentNetwork, setCurrentNetwork] = useState<Network>(SUPPORTED_NETWORKS[0])
   const [showNetworkModal, setShowNetworkModal] = useState(false)
@@ -157,20 +172,7 @@ export default function WarpKey() {
         : "border-gray-300 bg-white hover:bg-gray-50 text-gray-900",
   }
 
-  // Mock wallet connection
-  const connectWallet = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    const mockWallet: WalletInfo = {
-      address: "0x742d35Cc6634C0532925a3b8D4C9db96590b5b8e",
-      ens: "alice.eth",
-      balance: networkBalances[currentNetwork.id] || "0 " + currentNetwork.symbol,
-      network: currentNetwork.name,
-    }
-
-    setWallet(mockWallet)
-    setIsConnected(true)
-  }
+  // Wallet connection is now handled by WalletConnection component
 
   // Mock QR scan
   const handleQRScan = async () => {
@@ -299,7 +301,7 @@ export default function WarpKey() {
                   onClick={() => setShowNetworkModal(true)}
                   className={`${themeClasses.buttonText} h-8 px-2`}
                 >
-                  <span className="text-sm mr-1">{currentNetwork.icon}</span>
+                  <currentNetwork.icon size={16} className="mr-1" />
                   <span className="text-xs">{currentNetwork.name}</span>
                 </Button>
                 <Button
@@ -321,22 +323,10 @@ export default function WarpKey() {
         {/* Home View */}
         {currentView === "home" && (
           <div className="space-y-6">
-            {!isConnected ? (
-              <div className="text-center py-12">
-                <div
-                  className={`w-20 h-20 ${theme === "dark" ? "bg-gray-800" : "bg-gray-200"} rounded-2xl flex items-center justify-center mx-auto mb-6`}
-                >
-                  <Wallet className={`w-10 h-10 ${themeClasses.textMuted}`} />
-                </div>
-                <h2 className="text-2xl font-semibold mb-2">Connect Your Wallet</h2>
-                <p className={`${themeClasses.textMuted} mb-8`}>
-                  Get started with WarpKey by connecting your Farcaster wallet
-                </p>
-                <Button onClick={connectWallet} className={`w-full h-12 ${themeClasses.primary} font-medium`}>
-                  Connect Wallet
-                </Button>
-              </div>
-            ) : (
+            {/* Wallet Connection Component */}
+            <WalletConnection />
+            
+            {isConnected && (
               <>
                 {/* Quick Actions */}
                 <div className="grid grid-cols-2 gap-3">
@@ -580,50 +570,9 @@ export default function WarpKey() {
         )}
 
         {/* Wallet View */}
-        {currentView === "wallet" && wallet && (
+        {currentView === "wallet" && (
           <div className="space-y-6">
-            <Card className={themeClasses.card}>
-              <CardContent className="p-6 text-center">
-                <div
-                  className={`w-16 h-16 ${theme === "dark" ? "bg-gray-800" : "bg-gray-200"} rounded-full mx-auto mb-4 flex items-center justify-center`}
-                >
-                  <Wallet className={`w-8 h-8 ${themeClasses.textMuted}`} />
-                </div>
-                <h2 className="text-xl font-semibold mb-2">{wallet.ens || "My Wallet"}</h2>
-                <div className={`flex items-center justify-center gap-2 ${themeClasses.textMuted} mb-6`}>
-                  <span className="font-mono text-sm">
-                    {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={copyAddress} className="h-6 w-6 p-0">
-                    <Copy className="w-3 h-3" />
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div>
-                    <p className={`text-sm ${themeClasses.textMuted} mb-1`}>Balance</p>
-                    <p className="text-lg font-semibold">{wallet.balance}</p>
-                  </div>
-                  <div>
-                    <p className={`text-sm ${themeClasses.textMuted} mb-1`}>Network</p>
-                    <p className="text-lg font-semibold">{wallet.network}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Button
-              onClick={() => {
-                setIsConnected(false)
-                setWallet(null)
-                setSessions([])
-                setCurrentView("home")
-              }}
-              variant="outline"
-              className="w-full h-12 border-red-500 text-red-500 hover:bg-red-50 hover:border-red-600"
-            >
-              Disconnect Wallet
-            </Button>
+            <WalletConnection />
           </div>
         )}
 
@@ -705,8 +654,8 @@ export default function WarpKey() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 ${network.color} rounded-lg flex items-center justify-center`}>
-                          <span className="text-lg">{network.icon}</span>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center`}>
+                          <network.icon size={24} />
                         </div>
                         <div>
                           <p className="font-medium text-sm">{network.name}</p>
@@ -830,8 +779,8 @@ export default function WarpKey() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 ${network.color} rounded-lg flex items-center justify-center`}>
-                        <span>{network.icon}</span>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center`}>
+                        <network.icon size={20} />
                       </div>
                       <div>
                         <p className="font-medium text-sm">{network.name}</p>
