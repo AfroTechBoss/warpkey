@@ -1,15 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Camera, Scan, Link, Wallet, ArrowLeft, Check, X, Copy, ExternalLink, Clock, Sun, Moon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { BaseIcon, EthereumIcon, OptimismIcon, ArbitrumIcon, PolygonIcon, ZoraIcon } from "@/components/network-icons"
-import { WalletConnection } from "@/components/WalletConnection"
+import { useSignIn } from '@farcaster/auth-kit'
 import { useFarcaster } from "@/contexts/FarcasterContext"
-import { usePrivyWallet } from "@/contexts/PrivyContext"
+import sdk from '@farcaster/miniapp-sdk'
 
 type View = "home" | "scanner" | "browser" | "wallet" | "sessions" | "networks"
 type Theme = "dark" | "light"
@@ -121,20 +121,28 @@ export default function WarpKey() {
   const [pendingTransaction, setPendingTransaction] = useState<Transaction | null>(null)
   const [currentDApp, setCurrentDApp] = useState<DAppSession | null>(null)
   const [isScanning, setIsScanning] = useState(false)
+  const [showCastModal, setShowCastModal] = useState(false)
+  const [lastTransactionHash, setLastTransactionHash] = useState<string | null>(null)
   
-  // Use Farcaster and Privy contexts
-  const { isAuthenticated: farcasterAuthenticated, user: farcasterUser } = useFarcaster()
-  const { walletInfo } = usePrivyWallet()
+  // Use Farcaster context and auth
+  const { isAuthenticated: farcasterAuthenticated, user: farcasterUser, openCastComposer } = useFarcaster()
+  const { signIn, isSuccess, isError, error, url } = useSignIn({
+    onSuccess: ({ fid }) => {
+      console.log('Farcaster sign-in successful, FID:', fid)
+      // Notify Farcaster client that app is ready
+      sdk.actions.ready()
+    },
+  })
   
   // Network state needs to be declared before wallet object
   const [currentNetwork, setCurrentNetwork] = useState<Network>(SUPPORTED_NETWORKS[0])
   
-  // Determine connection state from contexts
-  const isConnected = farcasterAuthenticated || !!walletInfo
-  const wallet = walletInfo ? {
-    address: walletInfo.address,
-    ens: walletInfo.ensName,
-    balance: walletInfo.balance + ' ETH',
+  // Determine connection state from Farcaster only
+  const isConnected = farcasterAuthenticated
+  const wallet = farcasterAuthenticated && farcasterUser ? {
+    address: farcasterUser.verifiedAddresses?.[0] || '0x0000000000000000000000000000000000000000',
+    ens: farcasterUser.username,
+    balance: '0.00 ETH',
     network: currentNetwork.name
   } : null
   const [showNetworkModal, setShowNetworkModal] = useState(false)
@@ -146,6 +154,21 @@ export default function WarpKey() {
     polygon: "450.2 MATIC",
     zora: "0.05 ETH",
   })
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme")
+    if (savedTheme) {
+      setTheme(savedTheme as "light" | "dark")
+    }
+    
+    // Initialize Farcaster authentication on app launch
+    if (!farcasterAuthenticated) {
+      signIn()
+    }
+    
+    // Notify Farcaster client that app is ready
+    sdk.actions.ready()
+  }, [signIn, farcasterAuthenticated])
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark")
@@ -232,8 +255,17 @@ export default function WarpKey() {
     setPendingTransaction(null)
 
     if (approved) {
+      // Generate a mock transaction hash
+      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
+      setLastTransactionHash(mockTxHash)
+      
       setTimeout(() => {
-        alert("Transaction signed successfully!")
+        // Show cast-to-sign modal if user is authenticated with Farcaster
+        if (farcasterAuthenticated) {
+          setShowCastModal(true)
+        } else {
+          alert("Transaction signed successfully!")
+        }
       }, 300)
     }
   }
@@ -256,6 +288,40 @@ export default function WarpKey() {
   const copyAddress = () => {
     if (wallet?.address) {
       navigator.clipboard.writeText(wallet.address)
+    }
+  }
+
+  const handleCastToSign = async (shareTransaction: boolean) => {
+    setShowCastModal(false)
+    
+    if (shareTransaction && lastTransactionHash) {
+      try {
+        const castText = `Just signed a transaction on ${currentNetwork.name}! 🚀\n\nTx: ${lastTransactionHash.slice(0, 10)}...${lastTransactionHash.slice(-8)}\n\nPowered by @warpkey`
+        
+        await openCastComposer({
+          text: castText,
+          embeds: [`${currentNetwork.blockExplorer}/tx/${lastTransactionHash}`]
+        })
+      } catch (error) {
+        console.error('Failed to open cast composer:', error)
+        alert('Failed to open cast composer. Please try again.')
+      }
+    }
+    
+    // Reset transaction state
+    setLastTransactionHash(null)
+  }
+
+  const handleShareWarpKey = async () => {
+    try {
+      const castText = `Just discovered @warpkey - the ultimate Web3 wallet for Farcaster! 🔑\n\n✨ Seamless dApp connections\n🔒 Secure transaction signing\n🌐 Multi-network support\n\nThe future of Web3 UX is here! #WarpKey #Web3 #Farcaster`
+      
+      await openCastComposer({
+        text: castText
+      })
+    } catch (error) {
+      console.error('Failed to open cast composer:', error)
+      alert('Failed to open cast composer. Please try again.')
     }
   }
 
@@ -319,8 +385,53 @@ export default function WarpKey() {
         {/* Home View */}
         {currentView === "home" && (
           <div className="space-y-6">
-            {/* Wallet Connection Component */}
-            <WalletConnection />
+            {/* Farcaster Authentication */}
+             {!isConnected && (
+               <Card className={themeClasses.card}>
+                 <CardContent className="p-6 text-center">
+                   <div className="mb-4">
+                     <div className={`w-16 h-16 ${theme === "dark" ? "bg-purple-900/30" : "bg-purple-100"} rounded-full flex items-center justify-center mx-auto mb-4`}>
+                       <span className="text-2xl">🔑</span>
+                     </div>
+                     <h3 className="text-xl font-semibold mb-2">Connect with Farcaster</h3>
+                     <p className={`text-sm ${themeClasses.textMuted} mb-6`}>
+                       {url ? 'Scan the QR code with your Farcaster app' : 'Sign in with your Farcaster account to start using WarpKey'}
+                     </p>
+                   </div>
+                   
+                   {url && (
+                     <div className="mb-6">
+                       <div className={`w-48 h-48 ${theme === "dark" ? "bg-white" : "bg-gray-100"} rounded-lg flex items-center justify-center mx-auto mb-4`}>
+                         <div className="text-center">
+                           <div className="w-40 h-40 bg-black rounded flex items-center justify-center">
+                             <span className="text-white text-xs">QR Code</span>
+                           </div>
+                         </div>
+                       </div>
+                       <p className={`text-xs ${themeClasses.textMuted}`}>
+                         Or open this link: <a href={url} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline break-all">{url.slice(0, 50)}...</a>
+                       </p>
+                     </div>
+                   )}
+                   
+                   {!url && (
+                     <Button
+                       onClick={() => signIn()}
+                       className={`w-full h-12 bg-purple-600 hover:bg-purple-700 text-white`}
+                       disabled={isSuccess}
+                     >
+                       {isSuccess ? 'Connecting...' : 'Sign in with Farcaster'}
+                     </Button>
+                   )}
+                   
+                   {isError && (
+                     <p className="text-red-500 text-sm mt-2">
+                       {error?.message || 'Failed to sign in'}
+                     </p>
+                   )}
+                 </CardContent>
+               </Card>
+             )}
             
             {isConnected && (
               <>
@@ -344,6 +455,18 @@ export default function WarpKey() {
                     <span className="text-sm">Enter URL</span>
                   </Button>
                 </div>
+
+                {/* Cast Action - Only show if Farcaster is connected */}
+                {farcasterAuthenticated && (
+                  <Button
+                    onClick={() => handleShareWarpKey()}
+                    variant="outline"
+                    className={`h-12 flex items-center justify-center gap-2 ${themeClasses.outline} border-purple-600/50 hover:border-purple-600 hover:bg-purple-600/10`}
+                  >
+                    <span className="text-lg">📢</span>
+                    <span className="text-sm">Share WarpKey on Farcaster</span>
+                  </Button>
+                )}
 
                 {/* Wallet Summary */}
                 <Card className={themeClasses.card}>
@@ -378,11 +501,11 @@ export default function WarpKey() {
                       <h3 className="text-lg font-medium">Connected Apps</h3>
                       {sessions.length > 3 && (
                         <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCurrentView("sessions")}
-                          className={themeClasses.buttonText}
-                        >
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentView("sessions")}
+                        className={themeClasses.buttonText}
+                      >
                           View All
                         </Button>
                       )}
@@ -568,7 +691,38 @@ export default function WarpKey() {
         {/* Wallet View */}
         {currentView === "wallet" && (
           <div className="space-y-6">
-            <WalletConnection />
+            {isConnected && wallet && (
+              <Card className={themeClasses.card}>
+                <CardHeader>
+                  <CardTitle className="text-lg">Wallet Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className={`text-sm ${themeClasses.textMuted} mb-1`}>Username</p>
+                    <p className="font-medium">{wallet.ens || 'No username'}</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm ${themeClasses.textMuted} mb-1`}>Address</p>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-sm">
+                        {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={copyAddress} className="h-8 w-8 p-0">
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className={`text-sm ${themeClasses.textMuted} mb-1`}>Network</p>
+                    <p className="font-medium">{wallet.network}</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm ${themeClasses.textMuted} mb-1`}>Balance</p>
+                    <p className="font-medium">{wallet.balance}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
@@ -801,6 +955,52 @@ export default function WarpKey() {
                 className={`w-full ${themeClasses.buttonText} text-sm`}
               >
                 View All Networks
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cast-to-Sign Modal */}
+      {showCastModal && farcasterAuthenticated && lastTransactionHash && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div
+            className={`w-full max-w-sm ${theme === "dark" ? "bg-gray-900" : "bg-white"} rounded-2xl p-6 animate-in fade-in duration-300`}
+          >
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Transaction Signed!</h3>
+              <p className={`text-sm ${themeClasses.textMuted}`}>
+                Share your transaction with the Farcaster community?
+              </p>
+            </div>
+
+            <div className={`p-4 rounded-lg ${theme === "dark" ? "bg-gray-800" : "bg-gray-50"} mb-6`}>
+              <div className="flex items-center gap-3 mb-3">
+                <currentNetwork.icon size={20} />
+                <span className="font-medium text-sm">{currentNetwork.name}</span>
+              </div>
+              <p className={`text-xs ${themeClasses.textMuted} font-mono`}>
+                {lastTransactionHash.slice(0, 10)}...{lastTransactionHash.slice(-8)}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => handleCastToSign(false)}
+                variant="outline"
+                className={`h-12 ${theme === "dark" ? "border-gray-700 text-gray-300 hover:bg-gray-800" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+              >
+                Skip
+              </Button>
+              <Button
+                onClick={() => handleCastToSign(true)}
+                className={`h-12 bg-purple-600 hover:bg-purple-700 text-white`}
+              >
+                <span className="mr-2">📢</span>
+                Share Cast
               </Button>
             </div>
           </div>

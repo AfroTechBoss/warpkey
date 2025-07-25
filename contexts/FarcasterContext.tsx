@@ -12,6 +12,13 @@ interface FarcasterUser {
   verifiedAddresses?: string[];
 }
 
+interface ComposeCastResult {
+  cast: {
+    hash: string;
+    channelKey?: string;
+  } | null;
+}
+
 interface FarcasterContextType {
   user: FarcasterUser | null;
   isLoading: boolean;
@@ -19,6 +26,13 @@ interface FarcasterContextType {
   login: () => Promise<void>;
   logout: () => void;
   error: string | null;
+  openCastComposer: (options?: CastComposerOptions) => Promise<ComposeCastResult>;
+}
+
+interface CastComposerOptions {
+  text?: string;
+  embeds?: [] | [string] | [string, string];
+  channelKey?: string;
 }
 
 const FarcasterContext = createContext<FarcasterContextType | undefined>(undefined);
@@ -112,6 +126,27 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
     setError(null);
   };
 
+  const openCastComposer = async (options: CastComposerOptions = {}) => {
+    try {
+      if (!isAuthenticated) {
+        throw new Error('User must be authenticated to open cast composer');
+      }
+
+      // Use the Farcaster Mini App SDK to open the cast composer
+      const result = await sdk.actions.composeCast({
+        text: options.text || '',
+        embeds: options.embeds || [],
+        channelKey: options.channelKey,
+      });
+      
+      return result;
+    } catch (err) {
+      console.error('Failed to open cast composer:', err);
+      setError('Failed to open cast composer');
+      throw err;
+    }
+  };
+
   const value: FarcasterContextType = {
     user,
     isLoading,
@@ -119,6 +154,7 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
     login,
     logout,
     error,
+    openCastComposer,
   };
 
   return (

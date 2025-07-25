@@ -2,8 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { FarcasterProvider } from "@/contexts/FarcasterContext"
-import { PrivyWalletProvider } from "@/contexts/PrivyContext"
+import { Providers } from "@/components/providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -20,16 +19,12 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || 'clpispdty00ycl80fpueukbhl';
-
   return (
     <html lang="en">
       <body className={inter.className}>
-        <PrivyWalletProvider appId={privyAppId}>
-          <FarcasterProvider>
-            {children}
-          </FarcasterProvider>
-        </PrivyWalletProvider>
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   )
