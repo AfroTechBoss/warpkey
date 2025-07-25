@@ -38,11 +38,11 @@ const publicClient = createPublicClient({
   transport: http(),
 });
 
-interface PrivyWalletProviderProps {
+interface PrivyWalletProviderInnerProps {
   children: ReactNode;
 }
 
-const PrivyWalletProviderInner: React.FC<PrivyWalletProviderProps> = ({ children }) => {
+const PrivyWalletProviderInner: React.FC<PrivyWalletProviderInnerProps> = ({ children }) => {
   const { ready, authenticated, user } = usePrivy();
   const { wallets } = useWallets();
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);

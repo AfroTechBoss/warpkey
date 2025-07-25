@@ -126,6 +126,9 @@ export default function WarpKey() {
   const { isAuthenticated: farcasterAuthenticated, user: farcasterUser } = useFarcaster()
   const { walletInfo } = usePrivyWallet()
   
+  // Network state needs to be declared before wallet object
+  const [currentNetwork, setCurrentNetwork] = useState<Network>(SUPPORTED_NETWORKS[0])
+  
   // Determine connection state from contexts
   const isConnected = farcasterAuthenticated || !!walletInfo
   const wallet = walletInfo ? {
@@ -134,8 +137,6 @@ export default function WarpKey() {
     balance: walletInfo.balance + ' ETH',
     network: currentNetwork.name
   } : null
-
-  const [currentNetwork, setCurrentNetwork] = useState<Network>(SUPPORTED_NETWORKS[0])
   const [showNetworkModal, setShowNetworkModal] = useState(false)
   const [networkBalances, setNetworkBalances] = useState<Record<string, string>>({
     base: "2.45 ETH",
@@ -239,13 +240,8 @@ export default function WarpKey() {
 
   const switchNetwork = async (network: Network) => {
     setCurrentNetwork(network)
-    if (wallet) {
-      setWallet({
-        ...wallet,
-        network: network.name,
-        balance: networkBalances[network.id] || "0 " + network.symbol,
-      })
-    }
+    // Note: Wallet network and balance are now managed by Privy context
+    // The wallet info will be automatically updated when the network changes
     setShowNetworkModal(false)
   }
 
