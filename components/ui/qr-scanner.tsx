@@ -36,15 +36,32 @@ export function QRScannerComponent({
 
   const handleScan = useCallback((detectedCodes: any[]) => {
     if (detectedCodes && detectedCodes.length > 0 && !scanResult) {
-      const result = detectedCodes[0].rawValue
-      setScanResult(result)
-      setIsScanning(false)
-      
-      // Validate if it's a WalletConnect URI
-      if (result.startsWith('wc:') || result.includes('walletconnect')) {
-        onScanSuccess(result)
-      } else {
-        setError('Invalid QR code. Please scan a WalletConnect QR code.')
+      try {
+        const result = detectedCodes[0].rawValue
+        console.log('QR Code detected:', result)
+        
+        setScanResult(result)
+        setIsScanning(false)
+        
+        // Validate if it's a WalletConnect URI
+        if (result && (result.startsWith('wc:') || result.includes('walletconnect'))) {
+          // Clear any previous errors
+          setError(null)
+          // Call success handler with a small delay to ensure state is updated
+          setTimeout(() => {
+            onScanSuccess(result)
+          }, 100)
+        } else {
+          setError('Invalid QR code. Please scan a WalletConnect QR code.')
+          setTimeout(() => {
+            setError(null)
+            setScanResult(null)
+            setIsScanning(true)
+          }, 3000)
+        }
+      } catch (error) {
+        console.error('Error processing QR scan:', error)
+        setError('Failed to process QR code. Please try again.')
         setTimeout(() => {
           setError(null)
           setScanResult(null)

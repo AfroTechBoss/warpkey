@@ -233,18 +233,47 @@ function WarpKeyContent() {
     try {
       console.log('WalletConnect URI:', walletConnectUri)
       
-      // Parse WalletConnect URI to extract dApp information
-      const uri = new URL(walletConnectUri.replace('wc:', 'wc://'))
-      const params = new URLSearchParams(uri.search)
+      // Parse WalletConnect URI properly
+      let bridge = 'Unknown Bridge'
+      let key = 'Unknown Key'
+      let dappName = 'WalletConnect dApp'
       
-      // Extract bridge and key from WalletConnect URI
-      const bridge = params.get('bridge') || 'Unknown Bridge'
-      const key = params.get('key') || 'Unknown Key'
+      if (walletConnectUri.startsWith('wc:')) {
+        // WalletConnect v1 format: wc:topic@version?bridge=...&key=...
+        const uriParts = walletConnectUri.split('?')
+        if (uriParts.length > 1) {
+          const params = new URLSearchParams(uriParts[1])
+          bridge = params.get('bridge') || bridge
+          key = params.get('key') || key
+          
+          // Try to extract dApp name from bridge URL
+          try {
+            const bridgeUrl = new URL(bridge)
+            dappName = bridgeUrl.hostname.replace('www.', '') || dappName
+          } catch {
+            // Keep default name if bridge URL is invalid
+          }
+        }
+      } else if (walletConnectUri.includes('walletconnect')) {
+        // Handle other WalletConnect formats
+        try {
+          const url = new URL(walletConnectUri)
+          bridge = url.origin
+          dappName = url.hostname.replace('www.', '')
+        } catch {
+          // Fallback parsing
+          const match = walletConnectUri.match(/https?:\/\/([^\/?]+)/)
+          if (match) {
+            dappName = match[1].replace('www.', '')
+            bridge = match[0]
+          }
+        }
+      }
       
       // Create a session based on WalletConnect URI
       const walletConnectSession: DAppSession = {
         id: "wc-" + Date.now(),
-        name: "WalletConnect dApp",
+        name: dappName,
         url: bridge,
         icon: "🔗",
         connected: new Date(),
@@ -257,10 +286,18 @@ function WarpKeyContent() {
       setCurrentView("browser")
       
       // Show success message
-      alert('Successfully connected to WalletConnect dApp!')
+      try {
+        alert('Successfully connected to WalletConnect dApp!')
+      } catch (alertError) {
+        console.log('Successfully connected to WalletConnect dApp!')
+      }
     } catch (error) {
       console.error('Failed to process WalletConnect URI:', error)
-      alert('Failed to connect. Please try scanning the QR code again.')
+      try {
+        alert('Failed to connect. Please try scanning the QR code again.')
+      } catch (alertError) {
+        console.log('Failed to connect. Please try scanning the QR code again.')
+      }
       setIsScanning(false)
     }
   }
