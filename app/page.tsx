@@ -154,7 +154,7 @@ function WarpKeyContent() {
       console.log('Farcaster sign-in successful, FID:', fid)
       // Start a new session when user signs in
       if (farcasterUser) {
-        startSession(fid.toString(), farcasterUser.username || '', farcasterUser.displayName || '', farcasterUser.pfpUrl || '')
+        startSession()
       }
     },
   })
@@ -193,24 +193,11 @@ function WarpKeyContent() {
     
     // Start session if user is already authenticated
     if (farcasterAuthenticated && farcasterUser && !currentSession) {
-      startSession(
-        farcasterUser.fid.toString(), 
-        farcasterUser.username || '', 
-        farcasterUser.displayName || '', 
-        farcasterUser.pfpUrl || ''
-      )
+      startSession()
     }
   }, [signIn, farcasterAuthenticated, farcasterUser, currentSession, startSession])
 
-  // Notify Farcaster client that app is ready after initial render
-  useEffect(() => {
-    // Ensure the app is fully mounted and ready before notifying Farcaster
-    const timer = setTimeout(() => {
-      sdk.actions.ready()
-    }, 100)
-    
-    return () => clearTimeout(timer)
-  }, [])
+  // Note: sdk.actions.ready() is now called in FarcasterContext initialization
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark")
@@ -305,12 +292,12 @@ function WarpKeyContent() {
       // Create transaction record
       const transactionRecord = {
         id: mockTxHash,
-        type: 'send', // or determine from currentTx
+        type: 'send' as 'send' | 'receive' | 'approve' | 'swap' | 'mint',
         amount: currentTx.value,
         token: 'ETH',
         network: currentNetwork.name.toLowerCase(),
         hash: mockTxHash,
-        status: 'confirmed',
+        status: 'confirmed' as 'pending' | 'confirmed' | 'failed',
         dappName: currentDApp?.name,
         timestamp: new Date()
       }
@@ -558,13 +545,13 @@ function WarpKeyContent() {
                             {getPersonalizedGreeting()}
                           </h3>
                           <p className={`text-sm ${themeClasses.textMuted}`}>
-                            {getLaunchContext()?.source ? `Launched from ${getLaunchContext()?.source}` : 'Welcome to WarpKey'}
+                            {getLaunchContext()?.type ? `Launched from ${getLaunchContext()?.type}` : 'Welcome to WarpKey'}
                           </p>
                         </div>
                       </div>
                       {getPersonalizedInsights() && (
                         <div className={`text-sm ${themeClasses.textSecondary} bg-gradient-to-r from-purple-600/10 to-blue-600/10 rounded-lg p-3 mt-3`}>
-                          <p>{getPersonalizedInsights()}</p>
+                          <p>Airdrops eligible: {getPersonalizedInsights().totalAirdropsEligible}, Claimed: {getPersonalizedInsights().totalAirdropsClaimed}</p>
                         </div>
                       )}
                     </CardContent>
@@ -574,10 +561,9 @@ function WarpKeyContent() {
                 {/* User Profile - Show Farcaster identity */}
                 {farcasterAuthenticated && farcasterUser && (
                   <UserProfile 
-                    theme={theme} 
-                    view="compact"
-                    onViewProfile={() => setCurrentView("profile")}
-                  />
+                     theme={theme} 
+                     compact={true}
+                    />
                 )}
 
                 {/* Quick Actions */}
@@ -1038,7 +1024,7 @@ function WarpKeyContent() {
         {/* Profile View */}
         {currentView === "profile" && (
           <div className="space-y-6">
-            <UserProfile theme={theme} view="detailed" />
+            <UserProfile theme={theme} compact={false} />
           </div>
         )}
 

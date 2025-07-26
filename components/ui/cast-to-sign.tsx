@@ -157,10 +157,13 @@ export const CastToSign: React.FC<CastToSignProps> = ({ theme, transaction, onCl
         embeds: embeds.length > 0 ? embeds as [string] | [string, string] : undefined
       });
       
-      if (result?.cast?.hash && transaction) {
+      if (result?.cast?.hash && transaction && transaction.hash) {
         // Update transaction with cast hash
         const updatedTransaction = {
           ...transaction,
+          hash: transaction.hash, // Ensure hash is defined
+          type: transaction.type as 'send' | 'receive' | 'approve' | 'swap' | 'mint',
+          status: transaction.status as 'pending' | 'confirmed' | 'failed',
           castHash: result.cast.hash,
           sharedAt: new Date()
         };

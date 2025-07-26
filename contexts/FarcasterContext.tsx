@@ -116,6 +116,10 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
       if (context?.user) {
         await loadUserData(context.user, context);
       }
+      
+      // Signal that the app is ready - this removes the splash screen
+      await sdk.actions.ready();
+      console.log('Farcaster SDK ready() called successfully');
     } catch (err) {
       console.error('Failed to initialize Farcaster SDK:', err);
       setError('Failed to initialize Farcaster connection');
