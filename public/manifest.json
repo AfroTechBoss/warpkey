@@ -1,0 +1,22 @@
+{
+  "name": "WarpKey",
+  "version": "1.0.0",
+  "description": "Secure wallet management and transaction signing for Farcaster users",
+  "icon": "/placeholder-logo.png",
+  "splash_image": "/placeholder-logo.png",
+  "home_url": "/",
+  "image_url": "/placeholder-logo.png",
+  "button_title": "Open WarpKey",
+  "permissions": [
+    "identity",
+    "cast"
+  ],
+  "frame": {
+    "version": "next"
+  },
+  "miniapp": {
+    "manifest_version": "1.0.0",
+    "background_color": "#000000",
+    "theme_color": "#000000"
+  }
+}

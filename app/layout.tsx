@@ -8,10 +8,20 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "WarpKey - Farcaster Mini App",
-  description: "Connect your Farcaster wallet and interact with dApps",
+  description: "Secure wallet management and transaction signing for Farcaster users",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
-  themeColor: "#7c3aed",
-    generator: 'v0.dev'
+  themeColor: "#000000",
+  generator: 'v0.dev',
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/placeholder-logo.png',
+    apple: '/placeholder-logo.png'
+  },
+  openGraph: {
+    title: "WarpKey - Farcaster Mini App",
+    description: "Secure wallet management and transaction signing for Farcaster users",
+    images: ['/placeholder-logo.png']
+  }
 }
 
 export default function RootLayout({

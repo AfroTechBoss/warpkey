@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Camera, Scan, Link, Wallet, ArrowLeft, Check, X, Copy, ExternalLink, Clock, Sun, Moon } from "lucide-react"
+import { Camera, Scan, Link, Wallet, ArrowLeft, Check, X, Copy, ExternalLink, Clock, Sun, Moon, History, User, Share } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,9 +9,13 @@ import { Badge } from "@/components/ui/badge"
 import { BaseIcon, EthereumIcon, OptimismIcon, ArbitrumIcon, PolygonIcon, ZoraIcon } from "@/components/network-icons"
 import { useSignIn } from '@farcaster/auth-kit'
 import { useFarcaster } from "@/contexts/FarcasterContext"
+import { SessionProvider, useSession } from "@/contexts/SessionContext"
+import { UserProfile } from "@/components/ui/user-profile"
+import { SessionHistory } from "@/components/ui/session-history"
+import { CastToSign } from "@/components/ui/cast-to-sign"
 import sdk from '@farcaster/miniapp-sdk'
 
-type View = "home" | "scanner" | "browser" | "wallet" | "sessions" | "networks"
+type View = "home" | "scanner" | "browser" | "wallet" | "sessions" | "networks" | "profile" | "history" | "cast-to-sign"
 type Theme = "dark" | "light"
 
 interface WalletInfo {
@@ -112,7 +116,7 @@ const SUPPORTED_NETWORKS: Network[] = [
   },
 ]
 
-export default function WarpKey() {
+function WarpKeyContent() {
   const [currentView, setCurrentView] = useState<View>("home")
   const [theme, setTheme] = useState<Theme>("dark")
   const [sessions, setSessions] = useState<DAppSession[]>([])
@@ -123,14 +127,35 @@ export default function WarpKey() {
   const [isScanning, setIsScanning] = useState(false)
   const [showCastModal, setShowCastModal] = useState(false)
   const [lastTransactionHash, setLastTransactionHash] = useState<string | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   
-  // Use Farcaster context and auth
-  const { isAuthenticated: farcasterAuthenticated, user: farcasterUser, openCastComposer } = useFarcaster()
+  // Use enhanced Farcaster context and auth
+  const { 
+    isAuthenticated: farcasterAuthenticated, 
+    user: farcasterUser, 
+    openCastComposer, 
+    addMiniApp, 
+    isInFarcaster,
+    getPersonalizedGreeting,
+    getLaunchContext,
+    shareToProfile
+  } = useFarcaster()
+  const { 
+    currentSession, 
+    startSession, 
+    endSession, 
+    addTransaction,
+    addAirdropTracking,
+    getPersonalizedInsights,
+    shareSessionMilestone
+  } = useSession()
   const { signIn, isSuccess, isError, error, url } = useSignIn({
     onSuccess: ({ fid }) => {
       console.log('Farcaster sign-in successful, FID:', fid)
-      // Notify Farcaster client that app is ready
-      sdk.actions.ready()
+      // Start a new session when user signs in
+      if (farcasterUser) {
+        startSession(fid.toString(), farcasterUser.username || '', farcasterUser.displayName || '', farcasterUser.pfpUrl || '')
+      }
     },
   })
   
@@ -166,9 +191,26 @@ export default function WarpKey() {
       signIn()
     }
     
-    // Notify Farcaster client that app is ready
-    sdk.actions.ready()
-  }, [signIn, farcasterAuthenticated])
+    // Start session if user is already authenticated
+    if (farcasterAuthenticated && farcasterUser && !currentSession) {
+      startSession(
+        farcasterUser.fid.toString(), 
+        farcasterUser.username || '', 
+        farcasterUser.displayName || '', 
+        farcasterUser.pfpUrl || ''
+      )
+    }
+  }, [signIn, farcasterAuthenticated, farcasterUser, currentSession, startSession])
+
+  // Notify Farcaster client that app is ready after initial render
+  useEffect(() => {
+    // Ensure the app is fully mounted and ready before notifying Farcaster
+    const timer = setTimeout(() => {
+      sdk.actions.ready()
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [])
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark")
@@ -252,17 +294,39 @@ export default function WarpKey() {
 
   const handleTransactionApproval = (approved: boolean) => {
     setShowTransactionModal(false)
+    const currentTx = pendingTransaction
     setPendingTransaction(null)
 
-    if (approved) {
+    if (approved && currentTx) {
       // Generate a mock transaction hash
       const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
       setLastTransactionHash(mockTxHash)
       
+      // Create transaction record
+      const transactionRecord = {
+        id: mockTxHash,
+        type: 'send', // or determine from currentTx
+        amount: currentTx.value,
+        token: 'ETH',
+        network: currentNetwork.name.toLowerCase(),
+        hash: mockTxHash,
+        status: 'confirmed',
+        dappName: currentDApp?.name,
+        timestamp: new Date()
+      }
+      
+      // Add to session
+      if (currentSession) {
+        addTransaction(transactionRecord)
+      }
+      
+      // Set for cast-to-sign
+      setSelectedTransaction(transactionRecord)
+      
       setTimeout(() => {
         // Show cast-to-sign modal if user is authenticated with Farcaster
         if (farcasterAuthenticated) {
-          setShowCastModal(true)
+          setCurrentView('cast-to-sign')
         } else {
           alert("Transaction signed successfully!")
         }
@@ -325,6 +389,49 @@ export default function WarpKey() {
     }
   }
 
+  const handleAddToCollection = async () => {
+    try {
+      await addMiniApp()
+      alert('WarpKey has been added to your Farcaster collection! 🎉')
+    } catch (error) {
+      console.error('Failed to add to collection:', error)
+      alert('Failed to add WarpKey to your collection. Please try again.')
+    }
+  }
+
+  const handleEnhancedCastComposer = async (type: 'transaction' | 'achievement' | 'share' | 'custom', customText?: string) => {
+    try {
+      let castText = ''
+      let embeds: string[] = []
+      
+      switch (type) {
+        case 'transaction':
+          if (lastTransactionHash) {
+            castText = `Just completed a transaction on ${currentNetwork.name}! 🚀\n\nTx: ${lastTransactionHash.slice(0, 10)}...${lastTransactionHash.slice(-8)}\n\nPowered by @warpkey`
+            embeds = [`${currentNetwork.blockExplorer}/tx/${lastTransactionHash}`]
+          }
+          break
+        case 'achievement':
+          castText = `🎉 Achievement unlocked with @warpkey!\n\n✅ Successfully connected to ${sessions.length} dApps\n💰 Managed transactions across ${SUPPORTED_NETWORKS.length} networks\n🔐 Secure Web3 experience on Farcaster\n\n#WarpKey #Web3Achievement`
+          break
+        case 'share':
+          castText = `Just discovered @warpkey - the ultimate Web3 wallet for Farcaster! 🔑\n\n✨ Seamless dApp connections\n🔒 Secure transaction signing\n🌐 Multi-network support\n\nThe future of Web3 UX is here! #WarpKey #Web3 #Farcaster`
+          break
+        case 'custom':
+          castText = customText || 'Using @warpkey for seamless Web3 on Farcaster! 🚀'
+          break
+      }
+      
+      await openCastComposer({
+        text: castText,
+        embeds: embeds.length > 0 ? embeds as [string] | [string, string] : undefined
+      })
+    } catch (error) {
+      console.error('Failed to open enhanced cast composer:', error)
+      alert('Failed to open cast composer. Please try again.')
+    }
+  }
+
   return (
     <div className={`min-h-screen ${themeClasses.background} ${themeClasses.text}`}>
       {/* Header */}
@@ -340,7 +447,6 @@ export default function WarpKey() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
           )}
-
           <div className="flex items-center gap-2">
             <div
               className={`w-8 h-8 ${theme === "dark" ? "bg-white" : "bg-gray-900"} rounded-lg flex items-center justify-center`}
@@ -435,6 +541,45 @@ export default function WarpKey() {
             
             {isConnected && (
               <>
+                {/* Personalized Greeting */}
+                {farcasterAuthenticated && farcasterUser && (
+                  <Card className={themeClasses.card}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        {farcasterUser.pfpUrl && (
+                          <img 
+                            src={farcasterUser.pfpUrl} 
+                            alt={farcasterUser.displayName || farcasterUser.username} 
+                            className="w-12 h-12 rounded-full"
+                          />
+                        )}
+                        <div>
+                          <h3 className="font-semibold text-lg">
+                            {getPersonalizedGreeting()}
+                          </h3>
+                          <p className={`text-sm ${themeClasses.textMuted}`}>
+                            {getLaunchContext()?.source ? `Launched from ${getLaunchContext()?.source}` : 'Welcome to WarpKey'}
+                          </p>
+                        </div>
+                      </div>
+                      {getPersonalizedInsights() && (
+                        <div className={`text-sm ${themeClasses.textSecondary} bg-gradient-to-r from-purple-600/10 to-blue-600/10 rounded-lg p-3 mt-3`}>
+                          <p>{getPersonalizedInsights()}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* User Profile - Show Farcaster identity */}
+                {farcasterAuthenticated && farcasterUser && (
+                  <UserProfile 
+                    theme={theme} 
+                    view="compact"
+                    onViewProfile={() => setCurrentView("profile")}
+                  />
+                )}
+
                 {/* Quick Actions */}
                 <div className="grid grid-cols-2 gap-3">
                   <Button
@@ -456,16 +601,65 @@ export default function WarpKey() {
                   </Button>
                 </div>
 
-                {/* Cast Action - Only show if Farcaster is connected */}
+                {/* Session Actions */}
                 {farcasterAuthenticated && (
-                  <Button
-                    onClick={() => handleShareWarpKey()}
-                    variant="outline"
-                    className={`h-12 flex items-center justify-center gap-2 ${themeClasses.outline} border-purple-600/50 hover:border-purple-600 hover:bg-purple-600/10`}
-                  >
-                    <span className="text-lg">📢</span>
-                    <span className="text-sm">Share WarpKey on Farcaster</span>
-                  </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      onClick={() => setCurrentView("history")}
+                      variant="outline"
+                      className={`h-16 flex-col gap-2 ${themeClasses.outline}`}
+                    >
+                      <History className="w-5 h-5" />
+                      <span className="text-sm">Session History</span>
+                    </Button>
+
+                    <Button
+                      onClick={() => setCurrentView("cast-to-sign")}
+                      variant="outline"
+                      className={`h-16 flex-col gap-2 ${themeClasses.outline} border-purple-600/50 hover:border-purple-600 hover:bg-purple-600/10`}
+                    >
+                      <Share className="w-5 h-5" />
+                      <span className="text-sm">Cast to Sign</span>
+                    </Button>
+                  </div>
+                )}
+
+                {/* Farcaster Actions - Only show if Farcaster is connected */}
+                {farcasterAuthenticated && (
+                  <div className="space-y-3">
+                    {/* Add to Collection - Only show if in Farcaster */}
+                    {isInFarcaster && (
+                      <Button
+                        onClick={handleAddToCollection}
+                        variant="outline"
+                        className={`h-12 flex items-center justify-center gap-2 ${themeClasses.outline} border-blue-600/50 hover:border-blue-600 hover:bg-blue-600/10`}
+                      >
+                        <span className="text-lg">⭐</span>
+                        <span className="text-sm">Add WarpKey to Collection</span>
+                      </Button>
+                    )}
+                    
+                    {/* Enhanced Cast Actions */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        onClick={() => handleEnhancedCastComposer('share')}
+                        variant="outline"
+                        className={`h-12 flex-col gap-1 ${themeClasses.outline} border-purple-600/50 hover:border-purple-600 hover:bg-purple-600/10`}
+                      >
+                        <span className="text-lg">📢</span>
+                        <span className="text-xs">Share WarpKey</span>
+                      </Button>
+                      
+                      <Button
+                        onClick={() => handleEnhancedCastComposer('achievement')}
+                        variant="outline"
+                        className={`h-12 flex-col gap-1 ${themeClasses.outline} border-green-600/50 hover:border-green-600 hover:bg-green-600/10`}
+                      >
+                        <span className="text-lg">🎉</span>
+                        <span className="text-xs">Share Achievement</span>
+                      </Button>
+                    </div>
+                  </div>
                 )}
 
                 {/* Wallet Summary */}
@@ -840,6 +1034,34 @@ export default function WarpKey() {
             </Card>
           </div>
         )}
+
+        {/* Profile View */}
+        {currentView === "profile" && (
+          <div className="space-y-6">
+            <UserProfile theme={theme} view="detailed" />
+          </div>
+        )}
+
+        {/* Session History View */}
+        {currentView === "history" && (
+          <div className="space-y-6">
+            <SessionHistory theme={theme} />
+          </div>
+        )}
+
+        {/* Cast to Sign View */}
+        {currentView === "cast-to-sign" && (
+          <div className="space-y-6">
+            <CastToSign 
+              theme={theme} 
+              transaction={selectedTransaction}
+              onClose={() => {
+                setCurrentView("home")
+                setSelectedTransaction(null)
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Transaction Modal */}
@@ -1007,5 +1229,13 @@ export default function WarpKey() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function WarpKey() {
+  return (
+    <SessionProvider>
+      <WarpKeyContent />
+    </SessionProvider>
   )
 }
