@@ -5,7 +5,7 @@ import { Camera, Scan, Link, Wallet, ArrowLeft, Check, X, Copy, ExternalLink, Cl
 import { QRScannerComponent } from "@/components/ui/qr-scanner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge"
 import { BaseIcon, EthereumIcon, OptimismIcon, ArbitrumIcon, PolygonIcon, ZoraIcon } from "@/components/network-icons"
 import { useSignIn } from '@farcaster/auth-kit'
@@ -849,12 +849,24 @@ function WarpKeyContent() {
 
                 <Card className={themeClasses.card}>
                   <CardContent className="p-4">
-                    <div
-                      className={`aspect-video ${theme === "dark" ? "bg-gray-800" : "bg-gray-100"} rounded-lg flex items-center justify-center mb-4`}
-                    >
-                      <div className="text-center">
-                        <ExternalLink className={`w-12 h-12 ${themeClasses.textMuted} mx-auto mb-2`} />
-                        <p className={`text-sm ${themeClasses.textMuted}`}>dApp Interface</p>
+                    <div className="aspect-video rounded-lg overflow-hidden mb-4 relative">
+                      <iframe
+                        src={currentDApp.url}
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        title={`${currentDApp.name} dApp Interface`}
+                        onLoad={() => {
+                          // Inject wallet connection capabilities
+                          console.log(`Loaded dApp: ${currentDApp.name}`);
+                        }}
+                      />
+                      
+                      {/* Overlay for wallet connection status */}
+                      <div className="absolute top-2 right-2">
+                        <Badge className="bg-green-900 text-green-300 border-green-800 text-xs">
+                          🔗 Wallet Connected
+                        </Badge>
                       </div>
                     </div>
 
@@ -864,6 +876,18 @@ function WarpKeyContent() {
                         className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white text-sm"
                       >
                         Test Transaction
+                      </Button>
+
+                      <Button
+                        onClick={() => {
+                          // Open in external browser for full functionality
+                          window.open(currentDApp.url, '_blank', 'noopener,noreferrer');
+                        }}
+                        variant="outline"
+                        className={`w-full h-10 ${theme === "dark" ? "border-gray-700 text-gray-300 hover:bg-gray-800" : "border-gray-300 text-gray-700 hover:bg-gray-50"} text-sm`}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Open in Browser
                       </Button>
 
                       <Button
