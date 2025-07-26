@@ -100,6 +100,17 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
   const [isInFarcaster, setIsInFarcaster] = useState(false);
 
   useEffect(() => {
+    // Call ready() immediately to remove splash screen as soon as possible
+    const callReadyImmediately = async () => {
+      try {
+        await sdk.actions.ready();
+        console.log('Farcaster SDK ready() called immediately on mount');
+      } catch (err) {
+        console.error('Failed to call ready() immediately:', err);
+      }
+    };
+    
+    callReadyImmediately();
     initializeFarcaster();
   }, []);
 
@@ -107,6 +118,10 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
     try {
       setIsLoading(true);
       setError(null);
+
+      // Signal that the app is ready FIRST - this removes the splash screen immediately
+      await sdk.actions.ready();
+      console.log('Farcaster SDK ready() called successfully');
 
       // Check if running inside Farcaster and get full context
       const context = await sdk.context;
@@ -117,12 +132,17 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
         await loadUserData(context.user, context);
       }
       
-      // Signal that the app is ready - this removes the splash screen
-      await sdk.actions.ready();
-      console.log('Farcaster SDK ready() called successfully');
     } catch (err) {
       console.error('Failed to initialize Farcaster SDK:', err);
       setError('Failed to initialize Farcaster connection');
+      
+      // Even if there's an error, try to call ready() to remove splash screen
+      try {
+        await sdk.actions.ready();
+        console.log('Farcaster SDK ready() called after error');
+      } catch (readyErr) {
+        console.error('Failed to call ready() after error:', readyErr);
+      }
     } finally {
       setIsLoading(false);
     }
