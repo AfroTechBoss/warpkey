@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Camera, Scan, Link, Wallet, ArrowLeft, Check, X, Copy, ExternalLink, Clock, Sun, Moon, History, User, Share } from "lucide-react"
+import { QRScannerComponent } from "@/components/ui/qr-scanner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -227,24 +228,46 @@ function WarpKeyContent() {
 
   // Wallet connection is now handled by WalletConnection component
 
-  // Mock QR scan
-  const handleQRScan = async () => {
-    setIsScanning(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+  // Handle QR scan result
+  const handleQRScanSuccess = async (walletConnectUri: string) => {
+    try {
+      console.log('WalletConnect URI:', walletConnectUri)
+      
+      // Parse WalletConnect URI to extract dApp information
+      const uri = new URL(walletConnectUri.replace('wc:', 'wc://'))
+      const params = new URLSearchParams(uri.search)
+      
+      // Extract bridge and key from WalletConnect URI
+      const bridge = params.get('bridge') || 'Unknown Bridge'
+      const key = params.get('key') || 'Unknown Key'
+      
+      // Create a session based on WalletConnect URI
+      const walletConnectSession: DAppSession = {
+        id: "wc-" + Date.now(),
+        name: "WalletConnect dApp",
+        url: bridge,
+        icon: "🔗",
+        connected: new Date(),
+        permissions: ["eth_sendTransaction", "personal_sign", "eth_signTypedData"],
+      }
 
-    const mockSession: DAppSession = {
-      id: "uniswap-" + Date.now(),
-      name: "Uniswap",
-      url: "https://app.uniswap.org",
-      icon: "🦄",
-      connected: new Date(),
-      permissions: ["eth_sendTransaction", "personal_sign"],
+      setSessions((prev) => [...prev, walletConnectSession])
+      setCurrentDApp(walletConnectSession)
+      setIsScanning(false)
+      setCurrentView("browser")
+      
+      // Show success message
+      alert('Successfully connected to WalletConnect dApp!')
+    } catch (error) {
+      console.error('Failed to process WalletConnect URI:', error)
+      alert('Failed to connect. Please try scanning the QR code again.')
+      setIsScanning(false)
     }
+  }
 
-    setSessions((prev) => [...prev, mockSession])
-    setCurrentDApp(mockSession)
+  const handleQRScanClose = () => {
     setIsScanning(false)
-    setCurrentView("browser")
+    setCurrentView("home")
   }
 
   // Mock URL connection
@@ -569,7 +592,7 @@ function WarpKeyContent() {
                 {/* Quick Actions */}
                 <div className="grid grid-cols-2 gap-3">
                   <Button
-                    onClick={handleQRScan}
+                    onClick={() => setCurrentView("scanner")}
                     variant="outline"
                     className={`h-20 flex-col gap-2 ${themeClasses.outline}`}
                   >
@@ -730,60 +753,13 @@ function WarpKeyContent() {
 
         {/* QR Scanner View */}
         {currentView === "scanner" && (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold mb-2">Scan QR Code</h2>
-              <p className={themeClasses.textMuted}>Point your camera at a WalletConnect QR code</p>
-            </div>
-
-            <Card className={themeClasses.card}>
-              <CardContent className="p-4">
-                <div
-                  className={`aspect-square ${theme === "dark" ? "bg-black" : "bg-gray-900"} rounded-lg flex items-center justify-center relative overflow-hidden mb-4`}
-                >
-                  {isScanning ? (
-                    <div className="text-center">
-                      <div
-                        className={`animate-spin w-8 h-8 border-2 ${theme === "dark" ? "border-white border-t-transparent" : "border-gray-300 border-t-transparent"} rounded-full mx-auto mb-2`}
-                      ></div>
-                      <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-300"}`}>Scanning...</p>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <Camera
-                        className={`w-16 h-16 ${theme === "dark" ? "text-gray-600" : "text-gray-400"} mx-auto mb-2`}
-                      />
-                      <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-300"}`}>
-                        Camera preview
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Scanning frame */}
-                  <div
-                    className={`absolute inset-8 border-2 ${theme === "dark" ? "border-white" : "border-gray-300"} rounded-lg opacity-50`}
-                  >
-                    <div
-                      className={`absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 ${theme === "dark" ? "border-white" : "border-gray-300"}`}
-                    ></div>
-                    <div
-                      className={`absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 ${theme === "dark" ? "border-white" : "border-gray-300"}`}
-                    ></div>
-                    <div
-                      className={`absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 ${theme === "dark" ? "border-white" : "border-gray-300"}`}
-                    ></div>
-                    <div
-                      className={`absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 ${theme === "dark" ? "border-white" : "border-gray-300"}`}
-                    ></div>
-                  </div>
-                </div>
-
-                <Button onClick={handleQRScan} disabled={isScanning} className={`w-full h-12 ${themeClasses.primary}`}>
-                  {isScanning ? "Scanning..." : "Start Scan"}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+          <QRScannerComponent
+            onScanSuccess={handleQRScanSuccess}
+            onClose={handleQRScanClose}
+            theme={theme}
+            isScanning={isScanning}
+            setIsScanning={setIsScanning}
+          />
         )}
 
         {/* Browser View */}
